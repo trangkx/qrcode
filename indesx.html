@@ -3,36 +3,53 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Thanh toán VietQR</title>
+  <title>Thanh toán QR</title>
   <link rel="preconnect" href="https://img.vietqr.io">
   <style>
-    body{margin:0;font-family:"Segoe UI",Roboto,Arial,sans-serif;background:#0f172a;color:#e5e7eb}
-    .wrap{max-width:960px;margin:30px auto;padding:20px}
-    h1{font-size:22px;margin:0 0 20px}
-    .grid{display:grid;grid-template-columns:360px 1fr;gap:20px}
-    @media(max-width:880px){.grid{grid-template-columns:1fr}}
-    .card{background:#111827;border-radius:14px;padding:20px;box-shadow:0 6px 16px rgba(0,0,0,.3)}
-    .qr{width:300px;height:300px;border:1px solid #374151;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin:10px auto;background:#fff}
+    /* ====== Theme (dark fintech) ====== */
+    :root{
+      --bg:#0b1220; --card:#111827; --muted:#9ca3af;
+      --ink:#e5e7eb; --border:#374151; --brand:#059669;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:"Segoe UI",Roboto,Arial,sans-serif;background:#0f172a;color:var(--ink)}
+    .wrap{max-width:980px;margin:28px auto;padding:16px}
+    h1{font-size:22px;margin:0 0 16px}
+
+    /* ====== Layout ====== */
+    .grid{display:grid;grid-template-columns:420px 1fr;gap:18px}
+    @media (max-width:900px){ .grid{grid-template-columns:1fr} }
+    .card{background:var(--card);border-radius:14px;padding:20px;box-shadow:0 10px 24px rgba(0,0,0,.35)}
+    .card.hide{display:none}
+    /* khi chỉ còn QR, căn giữa cho đẹp */
+    .only-qr{grid-template-columns:1fr}
+    .qr-center{max-width:420px;margin:0 auto}
+
+    /* ====== QR & info ====== */
+    .qr{width:320px;height:320px;border:1px solid var(--border);border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin:10px auto;background:#fff}
     .qr img{width:100%;height:100%;object-fit:contain}
-    .muted{color:#9ca3af;font-size:13px}
-    .btns{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px}
-    button{padding:10px 14px;border-radius:10px;border:1px solid #374151;background:#1f2937;cursor:pointer;font-weight:600;color:#e5e7eb}
-    button.primary{background:#059669;border-color:#059669;color:#fff}
-    button.ghost{background:#1f2937;border-color:#374151}
-    input[type=text]{padding:10px;border-radius:8px;border:1px solid #374151;width:200px;text-align:right;background:#0b1220;color:#e5e7eb}
-    .row{display:flex;gap:8px;align-items:center}
     .info-line{margin-top:10px;font-size:15px}
-    .info-line span{font-weight:bold}
+    .info-line span{font-weight:700}
     .mono{font-variant-numeric: tabular-nums}
+
+    /* ====== Controls ====== */
+    .btns{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px}
+    button{padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:#1f2937;cursor:pointer;font-weight:600;color:var(--ink)}
+    .primary{background:var(--brand);border-color:var(--brand)}
+    .ghost{background:#1f2937}
+    .link{background:transparent;border:0;color:var(--muted);text-decoration:underline;cursor:pointer;padding:6px 8px}
+    input[type=text]{padding:10px;border-radius:8px;border:1px solid var(--border);background:#0b1220;color:var(--ink);width:220px;text-align:right}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .muted{color:var(--muted);font-size:13px}
   </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Thanh toán QR</h1>
+  <h1>Thanh toán QR để được gọi video với em Lê Thị Trang</h1>
 
-  <div class="grid">
-    <!-- QR và thông tin -->
-    <div class="card center">
+  <div id="layout" class="grid">
+    <!-- LEFT: QR panel -->
+    <div id="panelQR" class="card qr-center">
       <div class="qr"><img id="qrimg" alt="QR sẽ hiển thị ở đây"></div>
 
       <div class="info-line">Ngân hàng: <span>OCB</span></div>
@@ -46,10 +63,15 @@
         <button class="ghost" id="openQR">Mở ảnh QR</button>
         <button class="ghost" id="downloadQR">Tải ảnh QR</button>
       </div>
+
+      <!-- Nút mở lại form -->
+      <div class="btns" id="reopenWrap" style="display:none">
+        <button class="link" id="reopenForm">Nhập lại số tiền</button>
+      </div>
     </div>
 
-    <!-- Nhập số tiền -->
-    <div class="card">
+    <!-- RIGHT: form panel -->
+    <div id="panelForm" class="card">
       <h3>Nhập số tiền</h3>
       <div class="row">
         <input type="text" id="amount" placeholder="VD: 500.000">
@@ -65,9 +87,9 @@
   const ACCOUNT = '0030104444444444';
   const state = { url:'', amount:0, addInfo:'' };
 
-  // Format số với dấu chấm
-  function formatNumber(n){ return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, "."); }
-  function parseNumber(str){ return Number(str.replace(/\./g, "")); }
+  // Helpers format
+  const formatNumber = n => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+  const parseNumber = s => Number((s||'').replace(/\./g,''));
 
   function genAddInfo(){
     const d = new Date();
@@ -87,14 +109,31 @@
     const base = `https://img.vietqr.io/image/${BANK}-${ACCOUNT}-qr_only.png`;
     const url  = `${base}?addInfo=${encodeURIComponent(add)}&amount=${encodeURIComponent(amount)}`;
 
+    // cập nhật UI
     document.getElementById('qrimg').src = url;
     document.getElementById('addInfo').textContent   = add;
     document.getElementById('amountShow').textContent = formatNumber(amount) + ' VND';
+    document.getElementById('amount').value = formatNumber(amount);
 
+    // lưu trạng thái
     state.url = url; state.amount = amount; state.addInfo = add;
 
-    // Cập nhật lại input với format
-    document.getElementById('amount').value = formatNumber(amount);
+    // Ẩn form, chỉ còn QR
+    document.getElementById('panelForm').classList.add('hide');
+    document.getElementById('reopenWrap').style.display = 'flex';
+    const layout = document.getElementById('layout');
+    layout.classList.add('only-qr');          // 1 cột, căn giữa
+    document.getElementById('panelQR').classList.add('qr-center');
+  }
+
+  function reopenForm(){
+    document.getElementById('panelForm').classList.remove('hide');
+    document.getElementById('reopenWrap').style.display = 'none';
+    const layout = document.getElementById('layout');
+    layout.classList.remove('only-qr');
+    document.getElementById('panelQR').classList.remove('qr-center');
+    // focus số tiền
+    setTimeout(()=>document.getElementById('amount').focus(), 50);
   }
 
   async function copyAll(){
@@ -103,19 +142,16 @@
     try{ await navigator.clipboard.writeText(t); alert('Đã copy thông tin'); }
     catch{ alert('Không copy được'); }
   }
-
   async function copyAmount(){
-    const v = state.amount || parseNumber(document.getElementById('amount').value || "0");
+    const v = state.amount || parseNumber(document.getElementById('amount').value);
     if(!v){ alert('Chưa nhập số tiền'); return; }
     try{ await navigator.clipboard.writeText(formatNumber(v)); alert('Đã copy số tiền'); }
     catch{ alert('Không copy được'); }
   }
-
   function openQR(){
     if(!state.url){ alert('Tạo QR trước đã'); return; }
     window.open(state.url,'_blank');
   }
-
   async function downloadQR(){
     if(!state.url){ alert('Tạo QR trước đã'); return; }
     try{
@@ -128,19 +164,21 @@
     }catch(e){ alert('Không tải được ảnh'); }
   }
 
-  // Sự kiện
+  // Bind
   document.getElementById('makeQR').addEventListener('click', makeQR);
   document.getElementById('copyAll').addEventListener('click', copyAll);
   document.getElementById('copyAmount').addEventListener('click', copyAmount);
   document.getElementById('openQR').addEventListener('click', openQR);
   document.getElementById('downloadQR').addEventListener('click', downloadQR);
+  document.getElementById('reopenForm').addEventListener('click', reopenForm);
 
-  // Format khi nhập: tự thêm dấu chấm
+  // Nhập tiền tự thêm dấu chấm
   document.getElementById('amount').addEventListener('input', (e)=>{
-    let value = e.target.value.replace(/\D/g,"");
-    e.target.value = value ? formatNumber(value) : "";
+    let v = e.target.value.replace(/\D/g,'');
+    e.target.value = v ? formatNumber(v) : '';
   });
 
+  // hiển thị STK
   document.getElementById('accText').textContent = ACCOUNT;
 </script>
 </body>
